@@ -30,8 +30,11 @@ char * listNetworks() {
         oss << WiFi.RSSI(i);
         std::string str = oss.str();
         strcat(retval,str.c_str());
-        strcat(retval, "/");
-        
+        if (i != numSsid - 1) {
+            strcat(retval, ",");
+          }else {
+            strcat(retval, "]");
+          }
     }
   }
   WiFi.scanDelete(); 
@@ -46,7 +49,6 @@ void processCommand(String command) {
     if (command == "GET_WIFI") {
 
         Serial.printf("\nRES GET_WIFI: [%s\n", listNetworks());
-        Serial.printf("]\n");
     }
     else
     {

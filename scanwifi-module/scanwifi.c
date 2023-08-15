@@ -37,6 +37,7 @@ static const struct usb_device_id id_table[] = { { USB_DEVICE(VENDOR_ID, PRODUCT
 MODULE_DEVICE_TABLE(usb, id_table);
 bool ignore = true;
 char* first;
+char *newStr;
 
 // Cria e registra o driver do scanwifi no kernel
 static struct usb_driver scanwifi_driver = {
@@ -125,7 +126,8 @@ static char* usb_send_cmd(char *cmd, int param) {
                     // Acessa a parte da resposta que contém o número e converte para inteiro
                     resp_pos = &recv_line[strlen(resp_expected)];
                     first = recv_line;
-                    return first;
+                    newStr = first + 14;
+                    return newStr;
                 }
                 else { // Não é a linha que estávamos esperando. Pega a próxima.
                     printk(KERN_INFO "scanwifi: Nao eh resposta para %s! Tentiva %d. Proxima linha...\n", cmd, retries--);
