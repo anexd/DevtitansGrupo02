@@ -11,7 +11,7 @@ MODULE_LICENSE("GPL");
 
 static int  usb_probe(struct usb_interface *ifce, const struct usb_device_id *id); // Executado quando o dispositivo é conectado na USB
 static void usb_disconnect(struct usb_interface *ifce);                            // Executado quando o dispositivo USB é desconectado da USB
-static char usb_send_cmd(char *cmd, int param);                                    // Envia um comando via USB e espera/retorna a resposta do dispositivo (int)
+static char* usb_send_cmd(char *cmd, int param);                                    // Envia um comando via USB e espera/retorna a resposta do dispositivo (int)
 // Executado quando o arquivo /sys/kernel/smartlamp/{led, ldr, threshold} é lido (e.g., cat /sys/kernel/smartlamp/led)
 static ssize_t attr_show(struct kobject *sys_obj, struct kobj_attribute *attr, char *buff);
 // Executado quando o arquivo /sys/kernel/smartlamp/{led, ldr, threshold} é escrito (e.g., echo "100" | sudo tee -a /sys/kernel/smartlamp/led)
@@ -37,6 +37,7 @@ static struct kobject        *sys_obj;
 static const struct usb_device_id id_table[] = { { USB_DEVICE(VENDOR_ID, PRODUCT_ID) }, {} };
 MODULE_DEVICE_TABLE(usb, id_table);
 bool ignore = true;
+char* first;
 
 // Cria e registra o driver do smartlamp no kernel
 static struct usb_driver smartlamp_driver = {
@@ -80,7 +81,7 @@ static void usb_disconnect(struct usb_interface *interface) {
 // Envia um comando via USB, espera e retorna a resposta do dispositivo (convertido para int)
 // Exemplo de Comando:  SET_LED 80
 // Exemplo de Resposta: RES SET_LED 1
-static char usb_send_cmd(char *cmd, int param) {
+static char* usb_send_cmd(char *cmd, int param) {
     int recv_size = 0;                      // Quantidade de caracteres no recv_line
     int ret, actual_size, i;
     int retries = 10;                       // Tenta algumas vezes receber uma resposta da USB. Depois desiste.
@@ -97,10 +98,10 @@ static char usb_send_cmd(char *cmd, int param) {
     ret = usb_bulk_msg(smartlamp_device, usb_sndbulkpipe(smartlamp_device, usb_out), usb_out_buffer, strlen(usb_out_buffer), &actual_size, 1000);
     if (ret) {
         printk(KERN_ERR "SmartLamp: Erro de codigo %d ao enviar comando!\n", ret);
-        return -1;
+        return "error";
     }
 
-    sprintf(resp_expected, "[", cmd);  // Resposta esperada. Ficará lendo linhas até receber essa resposta.
+    sprintf(resp_expected, "RES %s", cmd);  // Resposta esperada. Ficará lendo linhas até receber essa resposta.
 
     // Espera pela resposta correta do dispositivo (desiste depois de várias tentativas)
     while (retries > 0) {
@@ -128,7 +129,8 @@ static char usb_send_cmd(char *cmd, int param) {
                     //ignore = kstrtol(resp_pos, 10, &resp_number);  // AQUI
 
                     //return resp_number;
-                    return recv_line;
+                    first = recv_line;
+                    return first;
                 }
                 else { // Não é a linha que estávamos esperando. Pega a próxima.
                     printk(KERN_INFO "SmartLamp: Nao eh resposta para %s! Tentiva %d. Proxima linha...\n", cmd, retries--);
@@ -141,12 +143,12 @@ static char usb_send_cmd(char *cmd, int param) {
             }
         }
     }
-    return -1; // Não recebi a resposta esperada do dispositivo
+    return "teste"; // Não recebi a resposta esperada do dispositivo
 }
 
 // Executado quando o arquivo /sys/kernel/smartlamp/{led, ldr, threshold} é lido (e.g., cat /sys/kernel/smartlamp/led)
 static ssize_t attr_show(struct kobject *sys_obj, struct kobj_attribute *attr, char *buff) {
-    int value;
+    char* value;
     const char *attr_name = attr->attr.name;
 
     printk(KERN_INFO "SmartLamp: Lendo %s ...\n", attr_name);
@@ -158,35 +160,11 @@ static ssize_t attr_show(struct kobject *sys_obj, struct kobj_attribute *attr, c
     else
         value = usb_send_cmd("GET_THRESHOLD", -1);
 
-    sprintf(buff, "%d\n", value);                   // Cria a mensagem com o valor do led, ldr ou threshold
+    sprintf(buff, "%s\n", value);                   // Cria a mensagem com o valor do led, ldr ou threshold
     return strlen(buff);
 }
 
 // Executado quando o arquivo /sys/kernel/smartlamp/{led, ldr, threshold} é escrito (e.g., echo "100" | sudo tee -a /sys/kernel/smartlamp/led)
 static ssize_t attr_store(struct kobject *sys_obj, struct kobj_attribute *attr, const char *buff, size_t count) {
-    long ret, value;
-    const char *attr_name = attr->attr.name;
-
-    ret = kstrtol(buff, 10, &value);
-    if (ret) {
-        printk(KERN_ALERT "SmartLamp: valor de %s invalido.\n", attr_name);
-        return -EACCES;
-    }
-
-    printk(KERN_INFO "SmartLamp: Setando %s para %ld ...\n", attr_name, value);
-
-    if (!strcmp(attr_name, "led"))
-        ret = usb_send_cmd("SET_LED", value);
-    else if (!strcmp(attr_name, "threshold"))
-        ret = usb_send_cmd("SET_THRESHOLD", value);
-    else {
-        printk(KERN_ALERT "SmartLamp: o valor do ldr (sensor de luz) eh apenas para leitura.\n");
-        return -EACCES;
-    }
-    if (ret < 0) {
-        printk(KERN_ALERT "SmartLamp: erro ao setar o valor do %s.\n", attr_name);
-        return -EACCES;
-    }
-
-    return strlen(buff);
+    return 0; 
 }
